@@ -1,0 +1,82 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
+parameters:
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+            - '../src/Tests/'
+
+    # controllers are imported separately to make sure services can be injected
+    # as action arguments even if you don't extend any base controller class
+    App\Controller\:
+        resource: '../src/Controller/'
+        tags: ['controller.service_arguments']
+
+    JiraClient:
+        class: JiraClient\JiraClient
+        arguments:
+            - 'https://jira.dev-og.com'
+            - 'yu.efin'
+            - 'Ka5bQoY-fQ'
+    App\Service\Jira\IssueReleaseManager:
+        arguments:
+            - '@JiraClient'
+    App\Service\Jira\IssueManager:
+        arguments:
+            - '@JiraClient'
+    App\Service\Report\ReportManager: ~
+    App\Service\Rabbit\MessageService: ~
+    Symfony\Component\Notifier\Bridge\Telegram\TelegramTransport:
+        arguments:
+            - '1799466301:AAGLmtXJreZC_Id6IUKkV_xvXJxwJe_pqQw'
+
+    Symfony\Component\Notifier\Chatter:
+        arguments:
+            - '@Symfony\Component\Notifier\Bridge\Telegram\TelegramTransport'
+
+    App\Service\Notify\TelegramNotify:
+        arguments:
+            - '@Symfony\Component\Notifier\Chatter'
+
+    App\Service\Task\TaskManager:
+        arguments:
+            - '@App\Repository\TaskRepository'
+            - '@doctrine.orm.default_entity_manager'
+
+    App\Service\Jira\UserManager:
+        arguments:
+            - '@JiraClient'
+            - '@App\Repository\UserRepository'
+            - '@App\Repository\DepartmentRepository'
+            - '@doctrine.orm.default_entity_manager'
+
+    App\Service\Jira\Interfaces\IssueManagerInterface: '@App\Service\Jira\IssueManager'
+    App\Service\Interfaces\ReportManagerInterface: '@App\Service\Report\ReportManager'
+    App\Service\Rabbit\Interfaces\MessageServiceInterface: '@App\Service\Rabbit\MessageService'
+    App\Service\Task\TaskManagerInterface: '@App\Service\Task\TaskManager'
+    App\Service\Jira\Interfaces\IssueReleaseManagerInterface: '@App\Service\Jira\IssueReleaseManager'
+
+    message_service:
+        class: App\Service\Rabbit\MessageConsumer
+
+    App\Service\Rabbit\MessagingProducer: '@old_sound_rabbit_mq.messaging_producer'
+
+    # subscribers
+    App\Service\Notify\Handler\TelegramReportSubscriber:
+        tags:
+            - 'kernel.event_subscriber'
